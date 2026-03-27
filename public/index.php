@@ -33,16 +33,5 @@ spl_autoload_register(function ($class) {
     }
 });
 
-// Initialize request and router
-$request = new App\Core\Request(
-    $_SERVER['REQUEST_METHOD'],
-    parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH),
-    $_GET,
-    getallheaders()
-);
-
-$router = new App\Core\Router();
-
+// Cargar rutas (por ahora simple, sin Router)
 require dirname(__DIR__) . '/src/routes.php';
-
-$router->dispatch($request);
