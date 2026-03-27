@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS products (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    sku VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) UNIQUE NOT NULL,
+    description TEXT,
+    price DECIMAL(10, 2) NOT NULL,
+    stock_quantity INT NOT NULL DEFAULT 0,
+    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+    category_id INT NOT NULL,
+    supplier_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE RESTRICT,
+    INDEX idx_sku (sku),
+    INDEX idx_slug (slug),
+    INDEX idx_status (status),
+    INDEX idx_category_id (category_id),
+    INDEX idx_supplier_id (supplier_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

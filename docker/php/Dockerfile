@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     git \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
@@ -40,7 +41,13 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.
 # Copy custom PHP configuration
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/custom.ini
 
+# Copy entrypoint script
+COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # Set working directory
 WORKDIR /var/www/html
 
 EXPOSE 80
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

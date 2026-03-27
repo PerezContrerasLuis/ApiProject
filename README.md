@@ -1,26 +1,31 @@
 # ApiProject
 
-Una API REST desarrollada en PHP 8.2 sin frameworks, diseñada desde cero con arquitectura limpia y moderna.
+API REST desarrollada en PHP 8.2 sin frameworks. Arquitectura limpia, escalable y lista para producción.
 
 ## ¿Qué es este proyecto?
 
-Es una API (Interfaz de Programación) que puedes usar para recibir y enviar datos. Está hecha en **PHP puro** sin usar frameworks como Laravel o Symfony, lo que la hace más ligera y personalizable.
+Una API de catálogo de productos con inventario. Hecha en **PHP puro** (sin Laravel, Symfony, etc.), lo que la hace más ligera y totalmente personalizable.
+
+**Características actuales:**
+- ✅ Catálogo de 20+ productos
+- ✅ Sistema de inventario con movimientos de entrada/salida
+- ✅ Categorías jerárquicas de productos
+- ✅ Gestión de proveedores
+- ✅ Sistema de roles para usuarios (admin, manager, viewer)
+- ✅ Base de datos completamente creada con datos de prueba
 
 ## Requisitos
 
-Necesitas tener instalado en tu computadora:
+- **Docker** — Ejecutar PHP y MySQL en contenedores
+- **Docker Compose** — Orquestar múltiples contenedores
 
-- **Docker** — para ejecutar PHP y MySQL sin instalarlos directamente
-- **Docker Compose** — para manejar múltiples contenedores
+Descarga desde: https://www.docker.com/products/docker-desktop
 
-Si no tienes Docker, descárgalo aquí: https://www.docker.com/products/docker-desktop
+## Instalación en 3 pasos
 
-## Instalación rápida
-
-### 1. Clonar o descargar el proyecto
+### 1. Clonar el proyecto
 
 ```bash
-cd /ruta/donde/quieras/el/proyecto
 git clone <url-del-repositorio>
 cd ApiProject
 ```
@@ -31,78 +36,30 @@ cd ApiProject
 cp .env.example .env
 ```
 
-El archivo `.env` contiene las contraseñas y datos de la base de datos. **No lo compartas con nadie.**
+El archivo `.env` tiene las credenciales de base de datos. **No lo compartas.**
 
-### 3. Iniciar los contenedores
+### 3. Levantar el ambiente
 
 ```bash
 docker-compose up -d --build
 ```
 
-Esto inicia:
-- **PHP 8.2** con Apache en `http://localhost`
-- **MySQL 8.0** en `localhost:3306`
+**Espera 15 segundos** para que MySQL se inicie y se carguen las migraciones + datos de prueba.
 
-### Comandos disponibles para controlar los contenedores
-
-| Comando | Qué hace | Datos |
-|---|---|---|
-| `docker-compose up -d` | Crea y enciende contenedores | Se conservan |
-| `docker-compose down` | Apaga y elimina contenedores | Se pierden |
-| `docker-compose stop` | Solo apaga sin eliminar | ✅ Se conservan |
-| `docker-compose start` | Enciende contenedores existentes | ✅ Se conservan |
-| `docker-compose restart` | Reinicia los contenedores | ✅ Se conservan |
-
-### 4. Verificar que funciona
+Verifica que todo esté listo:
 
 ```bash
-curl http://localhost/test
+docker logs api_php
 ```
 
 Deberías ver:
-```json
-{"message":"Welcome to ApiProject","version":"1.0.0"}
+```
+✨ Setup completado correctamente
+✅ Iniciando Apache...
 ```
 
-## Estructura del proyecto
+## Acceso a la API
 
-```
-ApiProject/
-├── public/               # Carpeta visible desde internet
-│   ├── index.php        # Punto de entrada (carga src/routes.php)
-│   └── .htaccess        # Redirige todas las requests a index.php
-├── src/                 # Código fuente (oculto desde internet)
-│   └── routes.php       # Define todas las rutas de la API
-├── docker/              # Configuración de Docker
-│   └── php/
-│       ├── Dockerfile   # Imagen con PHP 8.2 y extensiones
-│       └── php.ini      # Configuración de PHP
-├── docker-compose.yml   # Define servicios (PHP + MySQL)
-├── .env                 # Variables de entorno (NO COMPARTIR)
-├── .env.example         # Plantilla de .env
-├── .gitignore           # Archivos ignorados por Git
-├── CLAUDE.md            # Documentación técnica
-└── README.md            # Este archivo
-```
-
-## Estado actual
-
-### ✅ Listo
-
-- Docker + Apache + PHP 8.2 funcionando
-- MySQL 8.0 accesible en puerto 3306
-- `public/index.php` carga rutas
-- `.htaccess` redirige todo a `index.php`
-
-### 🔧 En construcción
-
-- Estructura de carpetas en `src/` (Controllers, Models, etc.)
-- Clases Core (Request, Response, Router, Database)
-- Sistema de routing automático
-
-## Endpoints disponibles
-
-### GET /test
 ```bash
 curl http://localhost/test
 ```
@@ -112,45 +69,118 @@ curl http://localhost/test
 {"message":"Welcome to ApiProject","version":"1.0.0"}
 ```
 
-## Cómo agregar nuevas rutas
+## Base de datos
 
-Edita `src/routes.php`:
+**Dominio:** Catálogo de productos con inventario
 
-```php
-<?php
+### Tablas creadas
 
-header('Content-Type: application/json; charset=utf-8');
+| Tabla | Descripción |
+|---|---|
+| `users` | Personal interno (admin, manager, viewer) |
+| `categories` | Categorías de productos (jerárquicas) |
+| `suppliers` | Proveedores de productos |
+| `products` | Catálogo de 20 productos |
+| `inventory_movements` | Historial de entrada/salida de stock |
 
-$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$method = $_SERVER['REQUEST_METHOD'];
+### Datos de prueba
 
-// Ruta GET /usuarios
-if ($path === '/usuarios' && $method === 'GET') {
-    echo json_encode([
-        'usuarios' => [
-            ['id' => 1, 'nombre' => 'Juan'],
-            ['id' => 2, 'nombre' => 'María']
-        ]
-    ]);
-    exit;
-}
+- **3 usuarios** con roles diferentes
+- **7 categorías** incluyendo subcategorías
+- **4 proveedores**
+- **20 productos** distribuidos entre categorías
+- **40+ movimientos** de inventario
 
-// Ruta GET /usuarios/{id}
-if (preg_match('#^/usuarios/(\d+)$#', $path, $matches) && $method === 'GET') {
-    $id = $matches[1];
-    echo json_encode(['id' => $id, 'nombre' => 'Usuario']);
-    exit;
-}
+Se cargan automáticamente al levantar el contenedor.
 
-// Ruta 404 por defecto
-http_response_code(404);
-echo json_encode(['error' => 'Ruta no encontrada']);
-exit;
+## Credenciales para testing
+
+### Base de datos MySQL
+
+| Campo | Valor |
+|---|---|
+| Host | localhost |
+| Puerto | 3306 |
+| Usuario | api_user |
+| Contraseña | secret |
+| Base de datos | api_db |
+
+Acceso root: usuario `root`, contraseña `rootsecret`
+
+### Usuarios de la API
+
+| Nombre | Email | Contraseña | Rol |
+|---|---|---|---|
+| Admin User | admin@example.com | admin123 | admin |
+| Manager User | manager@example.com | manager123 | manager |
+| Viewer User | viewer@example.com | viewer123 | viewer |
+
+## Herramientas recomendadas
+
+### DBeaver (gestor de BD)
+
+1. Descarga desde: https://dbeaver.io/
+2. Crea nueva conexión MySQL
+3. Usa credenciales de arriba
+4. Conéctate a `api_db`
+
+### Postman (cliente HTTP)
+
+Para probar endpoints de la API:
+
+```bash
+GET http://localhost/test
 ```
 
-**Nota:** Esto es temporal. Cuando construyas el Router, el routing será automático.
+## Estructura del proyecto
+
+```
+ApiProject/
+├── public/                          # Carpeta visible desde web
+│   ├── index.php                   # Punto de entrada de la API
+│   └── .htaccess                   # Redirige requests a index.php
+├── src/                             # Código fuente (oculto desde web)
+│   └── routes.php                  # Define rutas de la API
+├── database/                        # Base de datos
+│   ├── migrations/                 # Creación de tablas
+│   │   ├── 001_create_users_table.sql
+│   │   ├── 002_create_categories_table.sql
+│   │   ├── 003_create_suppliers_table.sql
+│   │   ├── 004_create_products_table.sql
+│   │   └── 005_create_inventory_movements_table.sql
+│   └── seeders/                    # Datos de prueba
+│       ├── 001_seed_users.sql
+│       ├── 002_seed_categories.sql
+│       ├── 003_seed_suppliers.sql
+│       ├── 004_seed_products.sql
+│       └── 005_seed_inventory_movements.sql
+├── cli/                             # Scripts PHP
+│   └── setup.php                   # Ejecuta migraciones y seeders
+├── docker/                          # Configuración Docker
+│   └── php/
+│       ├── Dockerfile             # Imagen PHP 8.2-Apache
+│       ├── php.ini                # Configuración PHP
+│       └── entrypoint.sh           # Script inicial del contenedor
+├── docker-compose.yml               # Orquesta PHP + MySQL
+├── .env                             # Variables de entorno (no compartir)
+├── .env.example                     # Template de .env
+├── .gitignore                       # Archivos ignorados por Git
+├── CLAUDE.md                        # Documentación técnica
+└── README.md                        # Este archivo
+```
 
 ## Comandos Docker útiles
+
+### Control de contenedores
+
+| Comando | Qué hace | Datos |
+|---|---|---|
+| `docker-compose up -d --build` | Crea y enciende todo | Se conservan |
+| `docker-compose down` | Apaga y elimina contenedores | Se pierden |
+| `docker-compose stop` | Apaga sin eliminar | ✅ Se conservan |
+| `docker-compose start` | Enciende lo existente | ✅ Se conservan |
+| `docker-compose restart` | Reinicia contenedores | ✅ Se conservan |
+| `docker-compose down -v` | Borra todo incluido datos | ❌ Se pierden TODOS |
 
 ### Ver logs
 
@@ -161,97 +191,130 @@ docker logs api_php
 # Logs de MySQL
 docker logs api_mysql
 
-# Ver en tiempo real
+# Seguir en tiempo real
 docker logs -f api_php
 ```
 
-### Entrar al contenedor PHP
+### Entrar al contenedor
 
 ```bash
+# Terminal en PHP
 docker exec -it api_php bash
+
+# Terminal en MySQL
+docker exec -it api_mysql bash
+
+# Acceder a MySQL desde terminal
+docker exec -it api_mysql mysql -u api_user -psecret -D api_db
 ```
 
-### Ejecutar comandos PHP
+### Ejecutar comandos en PHP
 
 ```bash
+# Ver extensiones instaladas
+docker exec api_php php -m
+
+# Versión de PHP
 docker exec api_php php -v
-docker exec api_php php -m  # Ver extensiones
+
+# Ver configuración PHP
+docker exec api_php php -i
 ```
 
-## Conectarse a MySQL
+## Endpoints actuales
 
-### Con DBeaver (recomendado)
+### GET /test
 
-- **Host:** `localhost`
-- **Puerto:** `3306`
-- **Usuario:** `root` o `api_user`
-- **Contraseña:** `rootsecret` o `secret`
-- **Base de datos:** `api_db`
-
-### Desde línea de comandos
+**Propósito:** Verificar que la API responde
 
 ```bash
-docker exec -it api_mysql mysql -u root -prootsecret -D api_db
+curl http://localhost/test
 ```
 
-## Tecnologías
-
-| Tecnología | Versión | Para qué |
-|---|---|---|
-| PHP | 8.2 | Lenguaje de programación |
-| Apache | 2.4 | Servidor web |
-| MySQL | 8.0 | Base de datos |
-| Xdebug | 3.5 | Debugging |
-| Opcache | Nativo | Caché de PHP |
+**Respuesta:**
+```json
+{"message":"Welcome to ApiProject","version":"1.0.0"}
+```
 
 ## Próximos pasos
 
-1. Crear estructura en `src/Core/`:
-   - `Request.php` — Maneja datos que llegan
-   - `Response.php` — Envía respuestas JSON
-   - `Router.php` — Routing automático
-   - `Database.php` — Conexión a MySQL
+1. **Crear clases Core** en `src/Core/`:
+   - Request.php — Maneja HTTP requests
+   - Response.php — Maneja HTTP responses JSON
+   - Router.php — Routing automático con parámetros
+   - Database.php — PDO singleton para MySQL
 
-2. Crear carpetas:
-   - `src/Controllers/`
-   - `src/Models/`
-   - `src/Middleware/`
-   - `src/Helpers/`
+2. **Crear Controllers** en `src/Controllers/`:
+   - ProductsController
+   - CategoriesController
+   - SuppliersController
+   - UsersController
+   - InventoryController
 
-3. Reemplazar routing manual en `src/routes.php` con Router automático
+3. **Crear Models** en `src/Models/`:
+   - Product
+   - Category
+   - Supplier
+   - User
+   - InventoryMovement
 
-4. Integrar Composer para autoload PSR-4
+4. **Crear Middleware** en `src/Middleware/`:
+   - AuthenticationMiddleware
+   - AuthorizationMiddleware
+   - ValidationMiddleware
+
+5. **Implementar endpoints** en `src/routes.php`:
+   - CRUD para cada entidad
+   - Filtros y búsqueda
+   - Paginación
+
+6. **Integrar Composer** cuando tengas estructura base:
+   - PSR-4 autoloading
+   - Dependencias opcionales (phpdotenv, etc.)
 
 ## Solucionar problemas
 
 ### Puerto 80 en uso
 
-```bash
-# Cambiar a puerto 8080 en docker-compose.yml
-ports:
-  - "8080:80"  # En lugar de "80:80"
+Otro programa usa el puerto. Cambia en `docker-compose.yml`:
 
-# Luego acceder a http://localhost:8080/test
+```yaml
+services:
+  php:
+    ports:
+      - "8080:80"  # En lugar de "80:80"
 ```
+
+Luego accede a `http://localhost:8080`
 
 ### MySQL no conecta
 
-- Espera 30 segundos a que MySQL se inicie
-- Verifica que `DB_HOST=mysql` en `.env`
-- Revisa logs: `docker logs api_mysql`
+1. Espera 30 segundos a que inicie
+2. Verifica logs: `docker logs api_mysql`
+3. Asegúrate que `DB_HOST=mysql` en `.env`
 
-### Cambios en PHP no aparecen
+### DBeaver no conecta a BD
 
-PHP está en un contenedor. Después de cambios:
+- Usa `localhost`, no `127.0.0.1`
+- Puerto debe ser `3306`
+- Verifica credenciales en tabla arriba
+
+### Cambios en PHP no se ven
+
+PHP está en contenedor con opcache. Reinicia:
 
 ```bash
 docker-compose restart api_php
 ```
 
+## Contribuir
+
+Reporta bugs en la sección de Issues.
+
 ## Licencia
 
-De uso personal. Úsalo como quieras.
+Uso personal. Úsalo como necesites.
 
 ---
 
-**Notas técnicas:** Ver `CLAUDE.md`
+**Documentación técnica:** Ver `CLAUDE.md`
