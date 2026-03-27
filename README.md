@@ -36,7 +36,7 @@ cd ApiProject
 cp .env.example .env
 ```
 
-El archivo `.env` tiene las credenciales de base de datos. **No lo compartas.**
+El archivo `.env` tiene las credenciales de base de datos. 
 
 ### 3. Levantar el ambiente
 
@@ -236,7 +236,7 @@ curl http://localhost/test
 {"message":"Welcome to ApiProject","version":"1.0.0"}
 ```
 
-## Próximos pasos
+
 
 1. **Crear clases Core** en `src/Core/`:
    - Request.php — Maneja HTTP requests
@@ -315,6 +315,4 @@ Reporta bugs en la sección de Issues.
 
 Uso personal. Úsalo como necesites.
 
----
 
-**Documentación técnica:** Ver `CLAUDE.md`
