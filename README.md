@@ -43,6 +43,21 @@ Esto inicia:
 - **PHP 8.2** con Apache en `http://localhost`
 - **MySQL 8.0** en `localhost:3306`
 
+  Comandos disponibles                                                                                                     
+                                                                                                                         
+  ┌────────────────────────┬──────────────────────────────────┬──────────────────────────────────┐
+  │        Comando         │             Qué hace             │              Datos               │
+  ├────────────────────────┼──────────────────────────────────┼──────────────────────────────────┤
+  │ docker-compose up -d   │ Crea y enciende contenedores     │ Se conservan                     │
+  ├────────────────────────┼──────────────────────────────────┼──────────────────────────────────┤
+  │ docker-compose down    │ Apaga y elimina contenedores     │ Se pierden (a menos que uses -v) │                         
+  ├────────────────────────┼──────────────────────────────────┼──────────────────────────────────┤
+  │ docker-compose stop    │ Solo apaga sin eliminar          │ (*) Se conservan                 │                         
+  ├────────────────────────┼──────────────────────────────────┼──────────────────────────────────┤                         
+  │ docker-compose start   │ Enciende contenedores existentes │ (*) Se conservan                 │
+  ├────────────────────────┼──────────────────────────────────┼──────────────────────────────────┤                         
+  │ docker-compose restart │ Reinicia los contenedores        │ (*) Se conservan                 │
+
 ### 4. Verificar que funciona
 
 ```bash
