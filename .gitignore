@@ -1,7 +1,25 @@
+# Environment
 .env
+.env.local
+.env.*.local
+
+# Composer
 /vendor/
+composer.lock
+
+# MySQL
 /mysql_data/
+
+# IDE
 .idea/
 .vscode/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs
 *.log
+*.txt
