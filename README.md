@@ -44,7 +44,10 @@ El archivo `.env` tiene las credenciales de base de datos.
 docker-compose up -d --build
 ```
 
-**Espera 15 segundos** para que MySQL se inicie y se carguen las migraciones + datos de prueba.
+**Espera 15-20 segundos** para que:
+1. MySQL se inicie
+2. Composer genere el autoloader (`vendor/autoload.php`)
+3. Se ejecuten las migraciones y seeders de la BD
 
 Verifica que todo esté listo:
 
@@ -57,6 +60,8 @@ Deberías ver:
 ✨ Setup completado correctamente
 ✅ Iniciando Apache...
 ```
+
+> **Nota:** Composer se instala automáticamente en el contenedor durante el build. No necesitas tenerlo instalado en tu máquina local.
 
 ## Acceso a la API
 
@@ -140,7 +145,15 @@ ApiProject/
 │   ├── index.php                   # Punto de entrada de la API
 │   └── .htaccess                   # Redirige requests a index.php
 ├── src/                             # Código fuente (oculto desde web)
-│   └── routes.php                  # Define rutas de la API
+│   ├── routes.php                  # Define rutas de la API
+│   ├── Core/                       # Clases núcleo (Request, Response, Router, etc)
+│   ├── Controllers/                # Controllers de la API
+│   ├── Services/                   # Lógica de negocio
+│   ├── Repositories/               # Acceso a datos
+│   ├── Models/                     # Entidades
+│   ├── Http/                       # DTOs (Data Transfer Objects)
+│   ├── Middleware/                 # Middleware (CORS, Auth, Validación)
+│   └── Helpers/                    # Funciones auxiliares
 ├── database/                        # Base de datos
 │   ├── migrations/                 # Creación de tablas
 │   │   ├── 001_create_users_table.sql
@@ -161,13 +174,65 @@ ApiProject/
 │       ├── Dockerfile             # Imagen PHP 8.2-Apache
 │       ├── php.ini                # Configuración PHP
 │       └── entrypoint.sh           # Script inicial del contenedor
+├── vendor/                          # Dependencias Composer (auto-generado)
+│   └── autoload.php                # Autoloader PSR-4
 ├── docker-compose.yml               # Orquesta PHP + MySQL
+├── composer.json                    # Configuración Composer (PSR-4)
+├── composer.lock                    # Lock file de Composer (generado)
 ├── .env                             # Variables de entorno (no compartir)
 ├── .env.example                     # Template de .env
 ├── .gitignore                       # Archivos ignorados por Git
 ├── CLAUDE.md                        # Documentación técnica
 └── README.md                        # Este archivo
 ```
+
+## Composer y Autoloading
+
+Este proyecto usa **Composer** para gestionar el autoloading PSR-4 de clases, aunque sin dependencias externas por ahora.
+
+### Cómo funciona
+
+1. **`composer.json`** define el namespace base:
+   ```json
+   {
+     "autoload": {
+       "psr-4": {
+         "App\\": "src/"
+       }
+     }
+   }
+   ```
+
+2. **Dockerfile** ejecuta automáticamente:
+   ```bash
+   composer install --no-dev --optimize-autoloader --prefer-dist
+   composer dump-autoload -o
+   ```
+
+3. **`public/index.php`** carga el autoloader:
+   ```php
+   require dirname(__DIR__) . '/vendor/autoload.php';
+   ```
+
+### Resultado
+
+Cualquier clase en `src/` automáticamente disponible con namespace `App\`:
+
+```php
+// src/Controllers/CategoryController.php
+namespace App\Controllers;
+
+class CategoryController { }
+
+// Accesible desde cualquier lado
+$controller = new App\Controllers\CategoryController();
+```
+
+### Notas
+
+- `vendor/` se genera automáticamente durante el build de Docker
+- NO incluir `vendor/` en Git (está en `.gitignore`)
+- Si agregas dependencias, Composer las instala automáticamente
 
 ## Comandos Docker útiles
 
