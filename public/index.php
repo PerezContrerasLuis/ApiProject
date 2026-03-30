@@ -18,5 +18,5 @@ if (file_exists($envPath)) {
     }
 }
 
-// Load routes (temporary, will be replaced by Router)
+// Load routes
 require dirname(__DIR__) . '/src/routes.php';

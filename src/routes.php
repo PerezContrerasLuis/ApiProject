@@ -1,20 +1,27 @@
 <?php
 
-header('Content-Type: application/json; charset=utf-8');
+use App\Core\Request;
+use App\Core\Router;
+use App\Core\Response;
+use App\Controllers\CategoryController;
+use App\Middleware\CorsMiddleware;
 
-$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$method = $_SERVER['REQUEST_METHOD'];
+$router = new Router();
 
-// Ruta GET /test
-if ($path === '/test' && $method === 'GET') {
-    echo json_encode([
-        "message" => "Welcome to ApiProject",
-        "version" => "1.0.0"
-    ]);
-    exit;
-}
+// Register middleware
+$router->use(new CorsMiddleware());
 
-// Ruta 404 por defecto
-http_response_code(404);
-echo json_encode(['error' => 'Ruta no encontrada']);
-exit;
+// Routes
+$router->get('/test', function (Request $request) {
+    Response::success([
+        'message' => 'Welcome to ApiProject',
+        'version' => '1.0.0',
+    ])->send();
+});
+
+$router->get('/api/v1/categories', [CategoryController::class, 'index']);
+$router->get('/api/v1/categories/{id:\d+}', [CategoryController::class, 'show']);
+
+// Dispatch the request
+$request = new Request();
+$router->dispatch($request);
