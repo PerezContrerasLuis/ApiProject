@@ -916,102 +916,68 @@ Para probar endpoints de la API:
 GET http://localhost/test
 ```
 
-## Estructura del proyecto
+## 🔧 Composer y Autoloading
 
-```
-ApiProject/
-├── public/                          # Carpeta visible desde web
-│   ├── index.php                   # Punto de entrada de la API
-│   └── .htaccess                   # Redirige requests a index.php
-├── src/                             # Código fuente (oculto desde web)
-│   ├── routes.php                  # Define rutas de la API
-│   ├── Core/                       # Clases núcleo (Request, Response, Router, etc)
-│   ├── Controllers/                # Controllers de la API
-│   ├── Services/                   # Lógica de negocio
-│   ├── Repositories/               # Acceso a datos
-│   ├── Models/                     # Entidades
-│   ├── Http/                       # DTOs (Data Transfer Objects)
-│   ├── Middleware/                 # Middleware (CORS, Auth, Validación)
-│   └── Helpers/                    # Funciones auxiliares
-├── database/                        # Base de datos
-│   ├── migrations/                 # Creación de tablas
-│   │   ├── 001_create_users_table.sql
-│   │   ├── 002_create_categories_table.sql
-│   │   ├── 003_create_suppliers_table.sql
-│   │   ├── 004_create_products_table.sql
-│   │   └── 005_create_inventory_movements_table.sql
-│   └── seeders/                    # Datos de prueba
-│       ├── 001_seed_users.sql
-│       ├── 002_seed_categories.sql
-│       ├── 003_seed_suppliers.sql
-│       ├── 004_seed_products.sql
-│       └── 005_seed_inventory_movements.sql
-├── cli/                             # Scripts PHP
-│   └── setup.php                   # Ejecuta migraciones y seeders
-├── docker/                          # Configuración Docker
-│   └── php/
-│       ├── Dockerfile             # Imagen PHP 8.2-Apache
-│       ├── php.ini                # Configuración PHP
-│       └── entrypoint.sh           # Script inicial del contenedor
-├── vendor/                          # Dependencias Composer (auto-generado)
-│   └── autoload.php                # Autoloader PSR-4
-├── docker-compose.yml               # Orquesta PHP + MySQL
-├── composer.json                    # Configuración Composer (PSR-4)
-├── composer.lock                    # Lock file de Composer (generado)
-├── .env                             # Variables de entorno (no compartir)
-├── .env.example                     # Template de .env
-├── .gitignore                       # Archivos ignorados por Git
-├── CLAUDE.md                        # Documentación técnica
-└── README.md                        # Este archivo
+Este proyecto usa **Composer** para gestionar el autoloading **PSR-4** de clases.
+
+### **¿Qué es PSR-4?**
+
+PSR-4 es un estándar que dice: *"Cada carpeta en el código mapea a un namespace, y cada clase tiene su propio archivo"*.
+
+```php
+// Archivo: src/Controllers/CategoryController.php
+namespace App\Controllers;   // Namespace
+class CategoryController {}   // Clase
+
+// Se accede así:
+$controller = new App\Controllers\CategoryController();
 ```
 
-## Composer y Autoloading
+### **Cómo funciona en este proyecto**
 
-Este proyecto usa **Composer** para gestionar el autoloading PSR-4 de clases, aunque sin dependencias externas por ahora.
-
-### Cómo funciona
-
-1. **`composer.json`** define el namespace base:
+1. **`composer.json`** define el mapeo:
    ```json
    {
      "autoload": {
        "psr-4": {
-         "App\\": "src/"
+         "App\\": "src/"       // Namespace App\ → carpeta src/
        }
      }
    }
    ```
 
-2. **Dockerfile** ejecuta automáticamente:
+2. **Dockerfile** durante el build ejecuta:
    ```bash
    composer install --no-dev --optimize-autoloader --prefer-dist
    composer dump-autoload -o
    ```
 
-3. **`public/index.php`** carga el autoloader:
+3. **Genera `vendor/autoload.php`:** Un archivo que "mapea" automáticamente cada clase.
+
+4. **`public/index.php`** carga el autoloader:
    ```php
    require dirname(__DIR__) . '/vendor/autoload.php';
    ```
 
-### Resultado
+### **Resultado**
 
-Cualquier clase en `src/` automáticamente disponible con namespace `App\`:
+Ya no necesitas hacer `require` manual de cada archivo:
 
 ```php
-// src/Controllers/CategoryController.php
-namespace App\Controllers;
+// ❌ VIEJO: Tedioso
+require_once '../src/Controllers/CategoryController.php';
+$c = new CategoryController();
 
-class CategoryController { }
-
-// Accesible desde cualquier lado
-$controller = new App\Controllers\CategoryController();
+// ✅ NUEVO: Automático
+use App\Controllers\CategoryController;
+$c = new CategoryController();
 ```
 
-### Notas
+### **Notas importantes**
 
-- `vendor/` se genera automáticamente durante el build de Docker
-- NO incluir `vendor/` en Git (está en `.gitignore`)
-- Si agregas dependencias, Composer las instala automáticamente
+- `vendor/` se genera automáticamente (NO incluir en Git)
+- Si agregas dependencias: `docker exec api_php composer require nombre/del-paquete`
+- Para actualizar autoload: `docker exec api_php composer dump-autoload -o`
 
 ## Comandos Docker útiles
 
@@ -1065,11 +1031,11 @@ docker exec api_php php -v
 docker exec api_php php -i
 ```
 
-## Endpoints actuales
+## 📡 Endpoints Actuales
 
-### GET /test
+### **GET /test**
 
-**Propósito:** Verificar que la API responde
+Verifica que la API responde:
 
 ```bash
 curl http://localhost/test
@@ -1077,86 +1043,146 @@ curl http://localhost/test
 
 **Respuesta:**
 ```json
-{"message":"Welcome to ApiProject","version":"1.0.0"}
+{
+  "status": "success",
+  "data": [
+    {
+      "message": "Welcome to ApiProject",
+      "version": "1.0.0"
+    }
+  ]
+}
 ```
 
+### **GET /api/v1/categories**
 
-
-1. **Crear clases Core** en `src/Core/`:
-   - Request.php — Maneja HTTP requests
-   - Response.php — Maneja HTTP responses JSON
-   - Router.php — Routing automático con parámetros
-   - Database.php — PDO singleton para MySQL
-
-2. **Crear Controllers** en `src/Controllers/`:
-   - ProductsController
-   - CategoriesController
-   - SuppliersController
-   - UsersController
-   - InventoryController
-
-3. **Crear Models** en `src/Models/`:
-   - Product
-   - Category
-   - Supplier
-   - User
-   - InventoryMovement
-
-4. **Crear Middleware** en `src/Middleware/`:
-   - AuthenticationMiddleware
-   - AuthorizationMiddleware
-   - ValidationMiddleware
-
-5. **Implementar endpoints** en `src/routes.php`:
-   - CRUD para cada entidad
-   - Filtros y búsqueda
-   - Paginación
-
-6. **Integrar Composer** cuando tengas estructura base:
-   - PSR-4 autoloading
-   - Dependencias opcionales (phpdotenv, etc.)
-
-## Solucionar problemas
-
-### Puerto 80 en uso
-
-Otro programa usa el puerto. Cambia en `docker-compose.yml`:
-
-```yaml
-services:
-  php:
-    ports:
-      - "8080:80"  # En lugar de "80:80"
-```
-
-Luego accede a `http://localhost:8080`
-
-### MySQL no conecta
-
-1. Espera 30 segundos a que inicie
-2. Verifica logs: `docker logs api_mysql`
-3. Asegúrate que `DB_HOST=mysql` en `.env`
-
-### DBeaver no conecta a BD
-
-- Usa `localhost`, no `127.0.0.1`
-- Puerto debe ser `3306`
-- Verifica credenciales en tabla arriba
-
-### Cambios en PHP no se ven
-
-PHP está en contenedor con opcache. Reinicia:
+Obtiene el listado paginado de categorías:
 
 ```bash
-docker-compose restart api_php
+curl "http://localhost/api/v1/categories?page=1&per_page=10"
 ```
 
-## Contribuir
+**Parámetros:**
+| Parámetro | Descripción | Default | Rango |
+|-----------|-------------|---------|-------|
+| `page` | Número de página | 1 | >= 1 |
+| `per_page` | Items por página | 10 | 1-100 |
 
-Reporta bugs en la sección de Issues.
+**Respuesta:** (Ver sección "Ejemplo de Respuesta" arriba)
 
-## Licencia
+### **GET /api/v1/categories/{id}**
 
-Uso personal. Úsalo como necesites.
+Obtiene una categoría específica por ID:
+
+```bash
+curl "http://localhost/api/v1/categories/1"
+```
+
+**Respuesta:**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 1,
+      "name": "Electrónica",
+      "slug": "electronica",
+      "parent_id": null
+    }
+  ],
+  "meta": null
+}
+```
+
+---
+
+## 🚀 Próximos Endpoints
+
+Plan futuro para completar la API:
+
+- [ ] **Products** — CRUD de productos
+- [ ] **Suppliers** — CRUD de proveedores
+- [ ] **Inventory** — Movimientos de stock
+- [ ] **Users** — Sistema de roles y autenticación
+- [ ] **Auth** — Login con JWT
+- [ ] **Search** — Búsqueda y filtros avanzados
+
+---
+
+## 🛠️ Solucionar Problemas
+
+| Problema | Solución |
+|----------|----------|
+| **Error 404 Endpoint not found** | La ruta no está en `src/routes.php` |
+| **Database connection failed** | Verifica `.env` (credenciales, host, puerto) |
+| **Class not found** | Ejecuta `docker exec api_php composer dump-autoload` |
+| **Puerto 80 en uso** | Cambia a puerto 8080 en `docker-compose.yml` |
+| **MySQL no conecta** | Espera 30s, verifica `docker logs api_mysql` |
+| **Cambios en PHP no se ven** | PHP usa opcache: `docker-compose restart api_php` |
+| **DBeaver no conecta** | Usa `localhost` (no `127.0.0.1`), puerto `3306` |
+
+---
+
+## 📚 Recursos y Documentación
+
+- **PHP 8.2 Documentation:** https://www.php.net/docs.php
+- **PDO Prepared Statements:** https://www.php.net/manual/en/pdo.prepared-statements.php
+- **CORS Explained:** https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
+- **Repository Pattern:** https://martinfowler.com/eaaCatalog/repository.html
+- **Docker Documentation:** https://docs.docker.com/
+- **PSR-4 Autoloading:** https://www.php-fig.org/psr/psr-4/
+
+---
+
+## 📝 Notas Técnicas Adicionales
+
+Ver archivo **`CLAUDE.md`** para:
+- Decisiones arquitectónicas en detalle
+- Comandos Docker avanzados
+- Configuración de Xdebug
+- Estructura de las tablas de BD
+- Credenciales de testing
+
+---
+
+## ✨ Resumen del Flujo
+
+```
+Cliente HTTP
+  ↓
+.htaccess (redirige a index.php)
+  ↓
+public/index.php (carga autoloader y rutas)
+  ↓
+src/routes.php (Router registra rutas y middleware)
+  ↓
+src/Core/Router.php (busca la ruta que coincida)
+  ↓
+src/Middleware/CorsMiddleware.php (agrega headers CORS)
+  ↓
+src/Controllers/CategoryController.php (obtiene parámetros, valida)
+  ↓
+src/Services/CategoryService.php (lógica de negocio)
+  ↓
+src/Repositories/CategoryRepository.php (consulta BD)
+  ↓
+src/Core/Database.php (conexión PDO Singleton)
+  ↓
+MySQL (retorna datos)
+  ↓
+Mapeo a src/Models/Category.php (objetos)
+  ↓
+src/DTOs/CategoryCollectionDTO.php (empaqueta)
+  ↓
+src/Core/Response.php (genera JSON)
+  ↓
+Cliente recibe respuesta JSON con código 200 ✅
+```
+
+---
+
+**Última actualización:** 2026-04-01  
+**Autor:** ApiProject Team  
+**Licencia:** Uso personal
 
 
