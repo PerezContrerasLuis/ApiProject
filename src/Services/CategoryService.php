@@ -9,9 +9,9 @@ class CategoryService
 {
     private CategoryRepository $repository;
 
-    public function __construct()
+    public function __construct(CategoryRepository $repository)
     {
-        $this->repository = new CategoryRepository();
+        $this->repository = $repository;
     }
 
     /**
@@ -35,20 +35,17 @@ class CategoryService
     /**
      * Get categories with pagination
      *
-     * @return array{data: Category[], meta: array}
+     * @return array{data: Category[], total: int, page: int, perPage: int}
      */
     public function getCategoriesPaginated(int $page = 1, int $perPage = 10): array
     {
         $result = $this->repository->paginate($page, $perPage);
 
         return [
-            'data' => array_map(fn(Category $cat) => $cat->toArray(), $result['data']),
-            'meta' => [
-                'total' => $result['total'],
-                'page' => $page,
-                'per_page' => $perPage,
-                'total_pages' => ceil($result['total'] / $perPage),
-            ],
+            'data'    => $result['data'],
+            'total'   => $result['total'],
+            'page'    => $page,
+            'perPage' => $perPage,
         ];
     }
 }

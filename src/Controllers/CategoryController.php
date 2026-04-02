@@ -4,6 +4,9 @@ namespace App\Controllers;
 
 use App\Core\Request;
 use App\Core\Response;
+use App\DTOs\CategoryDTO;
+use App\DTOs\CategoryCollectionDTO;
+use App\Factories\ServiceFactory;
 use App\Services\CategoryService;
 
 class CategoryController
@@ -12,7 +15,7 @@ class CategoryController
 
     public function __construct()
     {
-        $this->service = new CategoryService();
+        $this->service = ServiceFactory::makeCategory();
     }
 
     /**
@@ -33,7 +36,14 @@ class CategoryController
 
         $result = $this->service->getCategoriesPaginated($page, $perPage);
 
-        Response::success($result['data'], $result['meta'])->send();
+        $collection = new CategoryCollectionDTO(
+            categories: $result['data'],
+            total:      $result['total'],
+            page:       $result['page'],
+            perPage:    $result['perPage'],
+        );
+
+        Response::success($collection->toDataArray(), $collection->toMetaArray())->send();
     }
 
     /**
@@ -48,6 +58,8 @@ class CategoryController
             Response::notFound('Category not found')->send();
         }
 
-        Response::success([$category->toArray()])->send();
+        $dto = CategoryDTO::fromEntity($category);
+
+        Response::success([$dto->toArray()])->send();
     }
 }
