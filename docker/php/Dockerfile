@@ -53,7 +53,7 @@ COPY composer.json /var/www/html/
 WORKDIR /var/www/html
 
 # Install dependencies
-RUN composer install --no-dev --optimize-autoloader --prefer-dist && \
+RUN composer install --no-dev --optimize-autoloader --prefer-dist --no-security-blocking && \
     composer dump-autoload -o && \
     composer clear-cache
 

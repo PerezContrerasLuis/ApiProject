@@ -2,6 +2,8 @@
 
 namespace App\Factories;
 
+use App\Core\JwtService;
+use App\Services\AuthService;
 use App\Services\CategoryService;
 
 class ServiceFactory
@@ -10,5 +12,13 @@ class ServiceFactory
     {
         $repository = RepositoryFactory::makeCategory();
         return new CategoryService($repository);
+    }
+
+    public static function makeAuth(): AuthService
+    {
+        return new AuthService(
+            RepositoryFactory::makeUser(),
+            new JwtService(),
+        );
     }
 }

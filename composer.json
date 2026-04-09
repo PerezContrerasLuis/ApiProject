@@ -3,7 +3,8 @@
   "description": "Pure PHP 8.2 API without frameworks",
   "type": "project",
   "require": {
-    "php": ">=8.2"
+    "php": ">=8.2",
+    "firebase/php-jwt": "v5.5.1"
   },
   "autoload": {
     "psr-4": {

@@ -16,8 +16,9 @@ API REST pura en PHP 8.2 sin frameworks, con arquitectura profesional en capas.
 
 1. [Cómo funciona una solicitud HTTP](#cómo-funciona-una-solicitud-http)
 2. [Flujo detallado: GET /api/v1/categories](#flujo-detallado-get-apiv1categories)
-3. [Estructura del código](#estructura-del-código)
-4. [Requisitos e instalación](#requisitos)
+3. [Flujo detallado: POST /api/v1/auth/login](#flujo-detallado-post-apiv1authlogin)
+4. [Estructura del código](#estructura-del-código)
+5. [Requisitos e instalación](#requisitos)
 
 ---
 
@@ -985,6 +986,760 @@ sequenceDiagram
 
     Resp-->>Cliente: HTTP 200 + JSON
     Note over Cliente: {status:'success', data: [...], meta: {...}}
+```
+
+---
+
+## Flujo Detallado: POST /api/v1/auth/login
+
+En esta sección rastreamos paso a paso qué ocurre cuando haces una solicitud POST a `/api/v1/auth/login` con credenciales (email y contraseña). El flujo es similar al de GET /api/v1/categories, pero con autenticación: verifica el email en la BD, valida la contraseña bcrypt, y retorna un JWT token si es correcto.
+
+---
+
+### 1. public/index.php — Punto de entrada (22 líneas)
+
+El flujo comienza idéntico a GET /api/v1/categories:
+
+```php
+<?php
+
+// Línea 4: Carga el autoloader de Composer
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+// Línea 7-19: Lee el archivo .env y carga variables de entorno
+$envPath = dirname(__DIR__) . '/.env';
+if (file_exists($envPath)) {
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos($line, '=') !== false && strpos($line, '#') !== 0) {
+            list($key, $value) = explode('=', $line, 2);
+            $key = trim($key);
+            $value = trim($value);
+            $_ENV[$key] = $value;
+            putenv("$key=$value");
+        }
+    }
+}
+
+// Línea 22: Carga el archivo que define las rutas
+require dirname(__DIR__) . '/src/routes.php';
+```
+
+**Qué sucede:**
+
+- **Línea 4:** Carga el autoloader de Composer (permite acceder a firebase/php-jwt)
+- **Líneas 7-19:** Lee `.env` y carga variables de entorno incluyendo `JWT_SECRET` y `JWT_EXPIRY`
+- **Línea 22:** Carga `src/routes.php` que define la ruta POST /api/v1/auth/login
+
+---
+
+### 2. src/routes.php — Registro de la ruta POST (líneas 20-22)
+
+```php
+<?php
+
+use App\Core\Request;
+use App\Core\Router;
+use App\Core\Response;
+use App\Controllers\AuthController;     // Línea 7: NUEVO
+use App\Controllers\CategoryController;
+use App\Middleware\CorsMiddleware;
+
+$router = new Router();
+
+// Register middleware
+$router->use(new CorsMiddleware());
+
+// Routes
+$router->get('/test', function (Request $request) {
+    Response::success([
+        'message' => 'Welcome to ApiProject',
+        'version' => '1.0.0',
+    ])->send();
+});
+
+// Auth (NUEVO)
+// Línea 20: Registra la ruta POST /api/v1/auth/login
+$router->post('/api/v1/auth/login', [AuthController::class, 'login']);
+
+// Línea 22-23: Rutas de categorías existentes
+$router->get('/api/v1/categories', [CategoryController::class, 'index']);
+$router->get('/api/v1/categories/{id:\d+}', [CategoryController::class, 'show']);
+
+// Dispatch the request
+$request = new Request();
+$router->dispatch($request);
+```
+
+**Qué sucede:**
+
+- **Línea 7:** Importa la clase `AuthController` (NUEVA)
+- **Línea 20:** `$router->post(pattern, handler)` registra una ruta POST
+  - Patrón: `/api/v1/auth/login` (exacto, sin parámetros dinámicos)
+  - Handler: `[AuthController::class, 'login']` (array que indica clase y método)
+  - Cuando llega un POST a esa URL, Router instanciará AuthController y llamará al método login()
+
+---
+
+### 3. src/Core/Router.php — Manejo de POST (líneas 17-20, 37-47)
+
+El Router maneja POST igual que GET. Cuando `$router->post()` se llama:
+
+```php
+// Línea 17-20: Método post() delega a addRoute()
+public function post(string $pattern, mixed $handler): self
+{
+    return $this->addRoute('POST', $pattern, $handler);
+}
+
+// Línea 37-47: addRoute() almacena la ruta
+public function addRoute(string $method, string $pattern, mixed $handler): self
+{
+    $key = "$method $pattern";
+    $this->routes[$key] = [
+        'method' => 'POST',                           // Línea 41
+        'pattern' => '/api/v1/auth/login',            // Línea 42
+        'regex' => $this->patternToRegex($pattern),   // Línea 43
+        'handler' => [AuthController::class, 'login'], // Línea 44
+    ];
+    return $this;
+}
+```
+
+**Qué sucede:**
+
+- **Línea 41:** Se guarda el método HTTP 'POST'
+- **Línea 42:** Se guarda el patrón exacto
+- **Línea 43:** Se convierte a regex (sin parámetros dinámicos, solo: `#^/api/v1/auth/login$#`)
+- **Línea 44:** Se guarda el handler [clase, método]
+
+---
+
+### 4. src/Core/Request.php — Lectura del body JSON (líneas 44-50)
+
+Cuando llega un POST con `Content-Type: application/json`, Request lo procesa:
+
+```php
+// Línea 44-50: Método json() decodifica el body
+public function json(): array
+{
+    if ($this->cachedParsedBody === null) {
+        $decoded = json_decode($this->body(), true);
+        $this->cachedParsedBody = is_array($decoded) ? $decoded : [];
+    }
+    return $this->cachedParsedBody;
+}
+```
+
+**Qué sucede:**
+
+En nuestro caso, cuando el cliente envía:
+```json
+{
+  "email": "admin@example.com",
+  "password": "admin123"
+}
+```
+
+- **Línea 39:** `$this->body()` lee el stream `php://input` (el body HTTP crudo)
+- **Línea 47:** `json_decode()` convierte JSON a array PHP
+- El método retorna `['email' => 'admin@example.com', 'password' => 'admin123']`
+
+---
+
+### 5. src/Controllers/AuthController.php — Handler HTTP (líneas 21-42)
+
+Cuando Router despacha el POST, instancia AuthController y llama a login():
+
+```php
+<?php
+
+namespace App\Controllers;
+
+use App\Core\Request;
+use App\Core\Response;
+use App\Factories\ServiceFactory;
+use App\Services\AuthService;
+
+class AuthController
+{
+    private AuthService $service;
+
+    // Línea 16-19: Constructor (se ejecuta cuando se instancia)
+    public function __construct()
+    {
+        // Línea 18: Inyecta AuthService vía Factory
+        $this->service = ServiceFactory::makeAuth();
+    }
+
+    // Línea 21-42: Método login() (se ejecuta cuando Router lo despacha)
+    public function login(Request $request): void
+    {
+        // Línea 23: Decodifica el body JSON
+        $body = $request->json();
+        
+        // Línea 24: Extrae email (trim quita espacios)
+        $email = trim($body['email'] ?? '');
+        
+        // Línea 25: Extrae password
+        $password = $body['password'] ?? '';
+
+        // Línea 28-30: Valida que email no esté vacío
+        if (empty($email)) {
+            Response::validationError(['email' => 'Email is required'])->send();
+        }
+
+        // Línea 33-35: Valida formato de email
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Response::validationError(['email' => 'Email must be a valid email address'])->send();
+        }
+
+        // Línea 38-40: Valida que password no esté vacío
+        if (empty($password)) {
+            Response::validationError(['password' => 'Password is required'])->send();
+        }
+
+        // Línea 43: Llama al servicio para intentar login
+        $result = $this->service->login($email, $password);
+
+        // Línea 45-47: Si falló (credenciales inválidas)
+        if (!$result['success']) {
+            Response::unauthorized('Invalid credentials')->send();
+        }
+
+        // Línea 50-55: Si funcionó, retorna token + user
+        Response::success([
+            [
+                'token' => $result['token'],
+                'user' => $result['user'],
+            ]
+        ])->send();
+    }
+}
+```
+
+**Qué sucede línea a línea:**
+
+- **Línea 18:** El constructor inyecta `AuthService` usando la Factory (construcción lazy)
+- **Línea 23:** Decodifica el JSON del body
+- **Línea 24-25:** Extrae email y password del array
+- **Línea 28-35:** Valida email (no vacío y formato válido) → HTTP 422 si falla
+- **Línea 38-40:** Valida password (no vacía) → HTTP 422 si falla
+- **Línea 43:** Llama `AuthService::login()` con las credenciales
+- **Línea 45-47:** Si login falló (email no existe o password incorrecta) → HTTP 401
+- **Línea 50-55:** Si login funcionó → HTTP 200 con token y datos del usuario
+
+---
+
+### 6. src/Factories/ServiceFactory.php — Inyección de AuthService (líneas 16-23)
+
+Cuando el constructor de AuthController llama `ServiceFactory::makeAuth()`:
+
+```php
+<?php
+
+namespace App\Factories;
+
+use App\Core\JwtService;
+use App\Services\AuthService;
+use App\Services\CategoryService;
+
+class ServiceFactory
+{
+    public static function makeCategory(): CategoryService
+    {
+        $repository = RepositoryFactory::makeCategory();
+        return new CategoryService($repository);
+    }
+
+    // Línea 16-23: NUEVO - Crea AuthService con dependencias
+    public static function makeAuth(): AuthService
+    {
+        // Línea 18: Crea UserRepository
+        return new AuthService(
+            RepositoryFactory::makeUser(),
+            // Línea 20: Crea JwtService para generar tokens
+            new JwtService(),
+        );
+    }
+}
+```
+
+**Qué sucede:**
+
+- **Línea 18:** `RepositoryFactory::makeUser()` crea una instancia de `UserRepository`
+- **Línea 20:** `new JwtService()` crea una instancia del servicio JWT
+- Ambas se inyectan en el constructor de `AuthService` (línea 21)
+- El `AuthService` retornado ya tiene todo lo que necesita para hacer login
+
+---
+
+### 7. src/Factories/RepositoryFactory.php — Inyección de UserRepository (líneas 14-17)
+
+```php
+<?php
+
+namespace App\Factories;
+
+use App\Repositories\CategoryRepository;
+use App\Repositories\UserRepository;
+
+class RepositoryFactory
+{
+    public static function makeCategory(): CategoryRepository
+    {
+        return new CategoryRepository();
+    }
+
+    // Línea 14-17: NUEVO - Crea UserRepository
+    public static function makeUser(): UserRepository
+    {
+        return new UserRepository();
+    }
+}
+```
+
+**Qué sucede:**
+
+- **Línea 16:** Instancia `UserRepository` que en su constructor obtiene la conexión PDO via `Database::getInstance()`
+
+---
+
+### 8. src/Services/AuthService.php — Lógica de Autenticación (líneas 18-40)
+
+Cuando AuthController llama `$this->service->login($email, $password)`:
+
+```php
+<?php
+
+namespace App\Services;
+
+use App\Core\JwtService;
+use App\DTOs\UserDTO;
+use App\Repositories\UserRepository;
+
+class AuthService
+{
+    private UserRepository $repository;
+    private JwtService $jwtService;
+
+    // Línea 14-17: Constructor (inyecta dependencias)
+    public function __construct(UserRepository $repository, JwtService $jwtService)
+    {
+        $this->repository = $repository;
+        $this->jwtService = $jwtService;
+    }
+
+    // Línea 18-40: Ejecuta el login
+    public function login(string $email, string $password): array
+    {
+        // Línea 21: Busca el usuario por email en BD
+        $user = $this->repository->findByEmail($email);
+
+        // Línea 23: Verifica que exista y contraseña sea correcta
+        if (!$user || !password_verify($password, $user->passwordHash)) {
+            return [
+                'success' => false,
+                'message' => 'Invalid credentials',
+            ];
+        }
+
+        // Línea 30: Genera JWT token con id y role del usuario
+        $token = $this->jwtService->generate($user->id, $user->role);
+        
+        // Línea 31: Convierte User a UserDTO (sin password_hash)
+        $userDTO = UserDTO::fromEntity($user);
+
+        // Línea 33-38: Retorna token y datos del usuario
+        return [
+            'success' => true,
+            'token' => $token,
+            'user' => $userDTO->toArray(),
+        ];
+    }
+}
+```
+
+**Qué sucede línea a línea:**
+
+- **Línea 21:** `UserRepository::findByEmail()` consulta BD por email
+- **Línea 23:** `password_verify($password, $user->passwordHash)` compara password en texto plano con hash bcrypt guardado
+  - Si no existe usuario O password no coincide → retorna error
+- **Línea 30:** `JwtService::generate()` crea JWT token con id y role
+- **Línea 31:** `UserDTO::fromEntity()` convierte User a DTO (omite passwordHash)
+- **Línea 33-38:** Retorna array con éxito, token y usuario
+
+---
+
+### 9. src/Repositories/UserRepository.php — Consulta a BD (líneas 17-26)
+
+Cuando AuthService llama `$this->repository->findByEmail($email)`:
+
+```php
+<?php
+
+namespace App\Repositories;
+
+use App\Core\Database;
+use App\Models\User;
+use PDO;
+
+class UserRepository
+{
+    private PDO $db;
+
+    // Línea 13-16: Constructor obtiene conexión PDO
+    public function __construct()
+    {
+        $this->db = Database::getInstance();
+    }
+
+    // Línea 17-26: Busca usuario por email
+    public function findByEmail(string $email): ?User
+    {
+        // Línea 19-21: Prepara query SQL segura
+        $stmt = $this->db->prepare(
+            'SELECT id, name, email, password_hash, role FROM users WHERE email = ? LIMIT 1'
+        );
+        
+        // Línea 22: Ejecuta query con email como parámetro (seguro contra SQL injection)
+        $stmt->execute([$email]);
+        
+        // Línea 23: Obtiene la fila de resultado (o null)
+        $row = $stmt->fetch();
+
+        // Línea 25: Convierte fila a objeto User (incluyendo password_hash)
+        return $row ? User::fromArray($row) : null;
+    }
+}
+```
+
+**Qué sucede línea a línea:**
+
+- **Línea 19-21:** `prepare()` prepara la query SQL con placeholder `?` (seguro)
+- **Línea 22:** `execute([$email])` ejecuta la query sustituyendo el `?` por el email
+- **Línea 23:** `fetch()` retorna la fila como array asociativo (o null si no existe)
+- **Línea 25:** Si existe fila, `User::fromArray()` convierte a objeto User (incluyendo `password_hash`)
+
+**SQL ejecutada:**
+```sql
+SELECT id, name, email, password_hash, role FROM users WHERE email = 'admin@example.com' LIMIT 1
+```
+
+Retorna: `['id' => 1, 'name' => 'Admin User', 'email' => 'admin@example.com', 'password_hash' => '$2y$10/...', 'role' => 'admin']`
+
+---
+
+### 10. src/Models/User.php — Conversión a Objeto (líneas 17-25)
+
+```php
+<?php
+
+namespace App\Models;
+
+final class User
+{
+    public function __construct(
+        public readonly int $id,
+        public readonly string $name,
+        public readonly string $email,
+        public readonly string $role,
+        public readonly string $passwordHash = '',
+    ) {}
+
+    // Línea 17-25: Crea User desde array de BD
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            id: (int) $data['id'],
+            name: (string) $data['name'],
+            email: (string) $data['email'],
+            role: (string) $data['role'],
+            // Línea 23: Guarda password_hash PARA VERIFICACIÓN (no se serializa en toArray())
+            passwordHash: (string) ($data['password_hash'] ?? ''),
+        );
+    }
+
+    // Línea 28-36: Convierte a array (SIN password_hash)
+    public function toArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'email' => $this->email,
+            'role' => $this->role,
+        ];
+    }
+}
+```
+
+**Qué sucede:**
+
+- **Línea 17-25:** `fromArray()` crea un User con los 5 parámetros incluido `password_hash`
+- **Nota importante:** El `password_hash` se guarda internamente pero **NO aparece** en `toArray()` (línea 28-36)
+- Esto es seguridad: nunca enviamos el hash de contraseña al cliente
+
+---
+
+### 11. src/Core/JwtService.php — Generación de JWT (líneas 22-30)
+
+Cuando AuthService llama `$this->jwtService->generate($user->id, $user->role)`:
+
+```php
+<?php
+
+namespace App\Core;
+
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+class JwtService
+{
+    private string $secret;
+    private int $expiry;
+
+    // Línea 13-21: Constructor carga JWT_SECRET y JWT_EXPIRY del .env
+    public function __construct()
+    {
+        $this->secret = (string) getenv('JWT_SECRET');
+        $this->expiry = (int) (getenv('JWT_EXPIRY') ?: 3600);
+
+        if (empty($this->secret)) {
+            throw new \RuntimeException('JWT_SECRET environment variable is not set');
+        }
+    }
+
+    // Línea 22-30: Genera JWT token
+    public function generate(int $userId, string $role): string
+    {
+        // Línea 24-29: Estructura del JWT payload
+        return JWT::encode([
+            'sub' => $userId,                    // subject: id del usuario (línea 25)
+            'role' => $role,                     // role: admin, manager, viewer (línea 26)
+            'iat' => time(),                     // issued at: timestamp actual (línea 27)
+            'exp' => time() + $this->expiry,     // expiration: ahora + 3600 segundos (línea 28)
+        ], $this->secret, 'HS256');              // Firma con SECRET usando HS256 (línea 29)
+    }
+
+    // Línea 32-34: Decodifica JWT para verificación (usado en AuthMiddleware)
+    public function decode(string $token): object
+    {
+        return JWT::decode($token, new Key($this->secret, 'HS256'));
+    }
+}
+```
+
+**Qué sucede línea a línea:**
+
+- **Línea 25:** `'sub' => 1` — Identificador único del usuario (subject claim)
+- **Línea 26:** `'role' => 'admin'` — Rol para autorización futura
+- **Línea 27:** `'iat' => time()` — Timestamp de emisión
+- **Línea 28:** `'exp' => time() + 3600` — Expira en 1 hora
+- **Línea 29:** `JWT::encode()` de firebase/php-jwt firma todo con JWT_SECRET usando HS256
+
+**Resultado:**
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.
+eyJzdWIiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTcwMjEyMzQ1NiwiZXhwIjoxNzAyMTI3MDU2fQ.
+WfdapZkFNYA2pHSVVwQKvqkSFm0LjB3ir83hg...
+```
+
+Estructura: `Header.Payload.Signature`
+
+---
+
+### 12. src/DTOs/UserDTO.php — Transformación Segura (líneas 17-24)
+
+```php
+<?php
+
+namespace App\DTOs;
+
+use App\Models\User;
+
+final class UserDTO
+{
+    public function __construct(
+        public readonly int $id,
+        public readonly string $name,
+        public readonly string $email,
+        public readonly string $role,
+    ) {}
+
+    // Línea 17-24: Convierte User a UserDTO
+    public static function fromEntity(User $user): self
+    {
+        return new self(
+            id: $user->id,
+            name: $user->name,
+            email: $user->email,
+            role: $user->role,
+            // NOTA: password_hash no se copia aquí (seguridad)
+        );
+    }
+
+    // Línea 27-34: Serializa para JSON (sin password)
+    public function toArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'email' => $this->email,
+            'role' => $this->role,
+        ];
+    }
+}
+```
+
+**Qué sucede:**
+
+- **Línea 17-24:** Copia datos públicos del User al DTO
+- **Nota:** `passwordHash` no se copia (doble protección)
+- **Línea 27-34:** `toArray()` serializa sin incluir nunca el password
+
+---
+
+### 13. src/Core/Response.php — Envío de Respuesta (líneas 39-42, 64-74)
+
+Cuando AuthController llama `Response::success([['token' => ..., 'user' => ...]])`:
+
+```php
+<?php
+
+namespace App\Core;
+
+class Response
+{
+    private int $statusCode = 200;
+    private array $headers = ['Content-Type' => 'application/json; charset=utf-8'];
+    private array $data = [];
+
+    // ... otros métodos ...
+
+    // Línea 39-42: Factory method para respuesta exitosa
+    public static function success(array $data, array $meta = null, int $statusCode = 200): self
+    {
+        // Línea 41: Estructura JSON con status success
+        return new self([
+            'status' => 'success',
+            'data' => $data,
+            'meta' => $meta,
+        ], $statusCode);
+    }
+
+    // ... otros métodos ...
+
+    // Línea 64-74: Envía la respuesta HTTP
+    public function send(): void
+    {
+        // Línea 66: Establece código HTTP 200
+        http_response_code($this->statusCode);
+
+        // Línea 68-70: Emite headers HTTP
+        foreach ($this->headers as $key => $value) {
+            header("$key: $value");
+        }
+
+        // Línea 72: Serializa a JSON y envía al cliente
+        echo json_encode($this->data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        
+        // Línea 73: Detiene el script
+        exit;
+    }
+}
+```
+
+**Qué sucede:**
+
+- **Línea 41:** Estructura el array con `status: 'success'`
+- **Línea 66:** `http_response_code(200)` → HTTP 200 OK
+- **Línea 68-70:** Emite `Content-Type: application/json; charset=utf-8` y headers CORS
+- **Línea 72:** `json_encode()` convierte array PHP a JSON válido
+- **Línea 73:** `exit` termina el script, enviando la respuesta
+
+---
+
+### Flujo Completo Resumido
+
+```
+POST /api/v1/auth/login
+{ "email": "admin@example.com", "password": "admin123" }
+        ↓
+public/index.php: carga autoloader + .env
+        ↓
+src/routes.php: registra ruta POST
+        ↓
+Router.dispatch(): encuentra ruta, ejecuta middleware
+        ↓
+CorsMiddleware: agrega headers CORS
+        ↓
+Router.callHandler(): instancia AuthController
+        ↓
+AuthController.__construct(): inyecta AuthService vía Factory
+        ↓
+AuthController.login():
+  - valida email (no vacío, formato válido)
+  - valida password (no vacío)
+  - llama AuthService.login()
+        ↓
+AuthService.login():
+  - busca usuario por email en BD
+  - verifica password bcrypt
+  - genera JWT token
+  - convierte User a UserDTO
+  - retorna token + user
+        ↓
+AuthController: empaqueta token + user en Response
+        ↓
+Response::send(): 
+  - HTTP 200 OK
+  - Content-Type: application/json
+  - body: { status: "success", data: [{token, user}], meta: null }
+        ↓
+Cliente recibe token JWT para usar en futuras solicitudes
+```
+
+---
+
+### Respuesta Exitosa (HTTP 200)
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTcwMjEyMzQ1NiwiZXhwIjoxNzAyMTI3MDU2fQ.WfdapZkFNYA2pHSVVwQKvqkSFm0LjB3ir83hg...",
+      "user": {
+        "id": 1,
+        "name": "Admin User",
+        "email": "admin@example.com",
+        "role": "admin"
+      }
+    }
+  ],
+  "meta": null
+}
+```
+
+### Respuesta Validación Fallida (HTTP 422)
+
+```json
+{
+  "status": "error",
+  "message": "Validation failed",
+  "errors": {
+    "email": "Email must be a valid email address"
+  }
+}
+```
+
+### Respuesta Credenciales Inválidas (HTTP 401)
+
+```json
+{
+  "status": "error",
+  "message": "Invalid credentials"
+}
 ```
 
 ---
