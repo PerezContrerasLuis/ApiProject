@@ -17,8 +17,10 @@ API REST pura en PHP 8.2 sin frameworks, con arquitectura profesional en capas.
 1. [Cómo funciona una solicitud HTTP](#cómo-funciona-una-solicitud-http)
 2. [Flujo detallado: GET /api/v1/categories](#flujo-detallado-get-apiv1categories)
 3. [Flujo detallado: POST /api/v1/auth/login](#flujo-detallado-post-apiv1authlogin)
-4. [Estructura del código](#estructura-del-código)
-5. [Requisitos e instalación](#requisitos)
+4. [Configuración .htaccess](#14-publichhtaccess--configuración-para-la-autorización)
+5. [Validación de token](#15-srcmiddlewareauthmiddlewarephp--validación-de-jwt-en-endpoints)
+6. [Estructura del código](#estructura-del-código)
+7. [Requisitos e instalación](#requisitos)
 
 ---
 
