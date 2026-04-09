@@ -6,11 +6,13 @@ use App\Core\Response;
 use App\Controllers\AuthController;
 use App\Controllers\CategoryController;
 use App\Middleware\CorsMiddleware;
+use App\Middleware\AuthMiddleware;
 
 $router = new Router();
 
 // Register middleware
 $router->use(new CorsMiddleware());
+$router->use(new AuthMiddleware());
 
 // Routes
 $router->get('/test', function (Request $request) {

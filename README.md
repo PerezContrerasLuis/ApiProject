@@ -1744,6 +1744,344 @@ Cliente recibe token JWT para usar en futuras solicitudes
 
 ---
 
+### 14. public/.htaccess — Configuración para la autorización
+
+Apache no pasa automáticamente el header `Authorization` a PHP por razones de seguridad. Para que `AuthMiddleware` pueda leer el token JWT del header `Authorization: Bearer <token>`, debemos configurar Apache explícitamente.
+
+```php
+# Línea 1-2: Opciones de directorio
+Options -Indexes
+
+# Línea 4-6: Instruye a Apache que copie el header Authorization a HTTP_AUTHORIZATION
+# SetEnvIf lee headers HTTP y los asigna a variables de entorno
+# Authorization="(.*)" captura cualquier valor en el header Authorization
+# HTTP_AUTHORIZATION=$1 copia ese valor a la variable HTTP_AUTHORIZATION
+# Luego, PHP lo ve en $_SERVER['HTTP_AUTHORIZATION']
+<IfModule mod_setenvif.c>
+    SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
+# Línea 8-13: Reescritura de URLs (redirige todo a index.php)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
+```
+
+**Qué sucede:**
+
+- **Línea 1:** `Options -Indexes` — Deshabilita la visualización de directorios. Si alguien intenta acceder a una carpeta, no ve un listado de archivos.
+
+- **Líneas 4-6:** `<IfModule mod_setenvif.c>` — Bloque condicional que se ejecuta solo si Apache tiene el módulo `mod_setenvif` habilitado (necesario para `SetEnvIf`).
+
+- **Línea 5:** `SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1` — **Esta es la línea crítica:**
+  - `SetEnvIf` es una directiva de Apache que lee headers HTTP y crea variables de entorno
+  - `Authorization` — nombre del header HTTP a capturar
+  - `"(.*)"` — expresión regular que captura cualquier valor después de `Authorization: `
+  - `HTTP_AUTHORIZATION=$1` — copia ese valor a la variable de entorno `HTTP_AUTHORIZATION`, que PHP automáticamente expone como `$_SERVER['HTTP_AUTHORIZATION']`
+  
+  **Ejemplo:** Si el cliente envía `Authorization: Bearer eyJhbGci...`, Apache ejecuta:
+  ```
+  HTTP_AUTHORIZATION = "Bearer eyJhbGci..."
+  $_SERVER['HTTP_AUTHORIZATION'] = "Bearer eyJhbGci..."
+  ```
+
+- **Líneas 8-13:** Reescritura de URL — Redirige todas las solicitudes a `index.php` (front controller). Las excepciones son archivos que existen (`!-f`) o directorios (`!-d`).
+
+**¿Por qué es necesario?**
+
+Sin esta configuración, cuando el cliente envía:
+```
+GET /api/v1/categories
+Header: Authorization: Bearer eyJhbGci...
+```
+
+Apache recibe el header correctamente, pero no lo pasa a PHP. La clase `Request::parseHeaders()` línea 23-34 solo ve los headers en `$_SERVER` que comienzan con `HTTP_`. Como Apache bloquea el header `Authorization` por defecto, no aparece en `$_SERVER`, y `Request::header('Authorization')` retorna `null`.
+
+Con la configuración de `.htaccess`:
+1. Apache lee el header `Authorization`
+2. Lo copia a `HTTP_AUTHORIZATION` en `$_SERVER`
+3. `Request::parseHeaders()` lo convierte a `$_SERVER['http-authorization']` (minúsculas)
+4. `Request::header('Authorization')` ahora lo encuentra y retorna el token
+5. `AuthMiddleware::handle()` puede extraer el token y validarlo con `JwtService::decode()`
+
+---
+
+### 15. src/Middleware/AuthMiddleware.php — Validación de JWT en endpoints
+
+Ahora que tenemos el token JWT, necesitamos validarlo en los endpoints protegidos. `AuthMiddleware` es un middleware que se ejecuta **antes** de cada handler de controlador para verificar que el cliente envíe un token válido.
+
+```php
+<?php
+
+namespace App\Middleware;
+
+use App\Core\Middleware;
+use App\Core\Request;
+use App\Core\Response;
+use App\Core\JwtService;
+use Firebase\JWT\ExpiredException;
+use Firebase\JWT\SignatureInvalidException;
+
+class AuthMiddleware implements Middleware
+{
+    private JwtService $jwtService;
+    
+    // Línea 16-19: Rutas que NO requieren autenticación
+    // Las rutas públicas (login, test) se pueden acceder sin token
+    private array $publicRoutes = [
+        '/test',
+        '/api/v1/auth/login',
+    ];
+
+    // Línea 22-25: Constructor que instancia JwtService
+    // Se usa para decodificar y validar tokens JWT
+    public function __construct()
+    {
+        $this->jwtService = new JwtService();
+    }
+
+    // Línea 27: Implementa la interfaz Middleware
+    // handle() es el método obligatorio que ejecuta Apache antes del handler
+    public function handle(Request $request, callable $next): void
+    {
+        // Línea 32-37: Whitelist de rutas públicas
+        // Si la solicitud es a una ruta pública, no validar token
+        // Simplemente llamar $next() para continuar al siguiente middleware/handler
+        if (in_array($request->uri, $this->publicRoutes, true)) {
+            $next();
+            return;
+        }
+
+        // Línea 39-44: Validar que el header Authorization esté presente
+        // Si no está, retornar 401 Unauthorized
+        // El header debe estar en formato: "Authorization: Bearer <token>"
+        $authHeader = $request->header('Authorization');
+
+        if (empty($authHeader)) {
+            Response::unauthorized('Missing authorization token')->send();
+            return;
+        }
+
+        // Línea 46-50: Validar que el header tenga el formato correcto
+        // Debe comenzar con "Bearer " (con espacio)
+        // Si no, es formato incorrecto → 401
+        if (strpos($authHeader, 'Bearer ') !== 0) {
+            Response::unauthorized('Invalid authorization header format')->send();
+            return;
+        }
+
+        // Línea 52-54: Extraer el token del header
+        // El header es "Bearer <token>", así que extraemos desde posición 7
+        // Ejemplo: "Bearer eyJhbGci..." → extraer "eyJhbGci..."
+        $token = substr($authHeader, 7);
+
+        // Línea 56-64: Intentar decodificar el token con JwtService
+        try {
+            // JwtService::decode() verifica:
+            //   1. Firma del JWT (debe estar firmado con JWT_SECRET)
+            //   2. Que el token no esté expirado (compara 'exp' con time())
+            //   3. Estructura válida del JWT (3 partes separadas por .)
+            $decoded = $this->jwtService->decode($token);
+            
+            // Si la decodificación fue exitosa, guardar datos del usuario en el Request
+            // Luego el controller puede acceder vía: $request->getAttribute('user')
+            $request->setAttribute('user', $decoded);
+            
+            // Llamar $next() para continuar al siguiente middleware/handler
+            $next();
+        } catch (ExpiredException $e) {
+            // Token ha expirado (fecha 'exp' es anterior a time())
+            Response::unauthorized('Token expired')->send();
+        } catch (SignatureInvalidException $e) {
+            // Token fue firmado con otro JWT_SECRET (no el nuestro)
+            // Previene que alguien falsifique tokens
+            Response::unauthorized('Invalid token signature')->send();
+        } catch (\Exception $e) {
+            // Cualquier otro error durante decodificación
+            // (estructura malformada, encoding inválido, etc)
+            Response::unauthorized('Invalid token')->send();
+        }
+    }
+}
+```
+
+**Qué sucede:**
+
+- **Línea 16-19:** Array `$publicRoutes` — Define rutas que NO requieren token. Útil para:
+  - `/test` — endpoint de prueba sin protección
+  - `/api/v1/auth/login` — no puedes enviar token para obtener token
+  - Más adelante, `/api/v1/auth/register` también necesitará estar en esta lista (aunque tendrá su propia validación de admin)
+
+- **Línea 32-37:** **Whitelist de rutas públicas** — Si la solicitud es a una ruta pública, simplemente llamar `$next()` sin validar token. El middleware retorna sin hacer nada.
+
+- **Línea 39-50:** **Validación del header** — Si no es una ruta pública:
+  1. Verificar que `Authorization` header esté presente (no vacío)
+  2. Verificar que comience con `Bearer ` (espacio incluido)
+  3. Si falla, retornar HTTP 401 con mensaje descriptivo
+
+- **Línea 52-54:** **Extracción del token** — El header tiene formato `Bearer <token>`, así que extraemos desde la posición 7 (después de "Bearer ").
+
+- **Línea 56-64:** **Decodificación y validación** — Llamar `JwtService::decode($token)`:
+  - Si es válido: retorna objeto con `sub` (user id), `role`, `iat` (issued at), `exp` (expiration)
+  - Si expiró: lanza `ExpiredException`
+  - Si fue manipulado: lanza `SignatureInvalidException`
+  - Si tiene estructura inválida: lanza `\Exception`
+
+- **Línea 62:** `$request->setAttribute('user', $decoded)` — Guardar datos del JWT en el request. Luego, el controller puede hacer:
+  ```php
+  $user = $request->getAttribute('user');
+  echo $user->role;  // "admin", "manager", "viewer"
+  echo $user->sub;   // user id
+  ```
+
+---
+
+### 16. src/routes.php — Registro de AuthMiddleware en el pipeline
+
+El middleware debe registrarse en el router para que se ejecute en cada solicitud.
+
+```php
+<?php
+
+use App\Core\Request;
+use App\Core\Router;
+use App\Core\Response;
+use App\Controllers\AuthController;
+use App\Controllers\CategoryController;
+use App\Middleware\CorsMiddleware;
+// Línea 8: Importar AuthMiddleware
+use App\Middleware\AuthMiddleware;
+
+$router = new Router();
+
+// Línea 12: Registrar CorsMiddleware primero
+// Debe ejecutarse primero para que todas las solicitudes tengan headers CORS
+$router->use(new CorsMiddleware());
+
+// Línea 15: Registrar AuthMiddleware después de CORS
+// Valida tokens JWT en todos los endpoints (excepto publicRoutes)
+$router->use(new AuthMiddleware());
+
+// Routes
+$router->get('/test', function (Request $request) {
+    Response::success([
+        'message' => 'Welcome to ApiProject',
+        'version' => '1.0.0',
+    ])->send();
+});
+
+// Auth
+$router->post('/api/v1/auth/login', [AuthController::class, 'login']);
+
+// Categories
+$router->get('/api/v1/categories', [CategoryController::class, 'index']);
+$router->get('/api/v1/categories/{id:\d+}', [CategoryController::class, 'show']);
+
+// Dispatch the request
+$request = new Request();
+$router->dispatch($request);
+```
+
+**Qué sucede:**
+
+- **Línea 8:** `use App\Middleware\AuthMiddleware;` — Importar la clase AuthMiddleware (namespace).
+
+- **Línea 15:** `$router->use(new AuthMiddleware());` — Registrar el middleware en el router.
+  - El orden importa: CORS va primero (prepara headers), AuthMiddleware va segundo (valida tokens).
+  - Ver **Middleware Pipeline** en el diagrama de arquitectura más abajo.
+
+- **Líneas 20-31:** Las 4 rutas definidas:
+  - `/test` — en `$publicRoutes`, no requiere token
+  - `/api/v1/auth/login` — en `$publicRoutes`, no requiere token
+  - `/api/v1/categories` — **PROTEGIDA**, requiere token válido
+  - `/api/v1/categories/{id:\d+}` — **PROTEGIDA**, requiere token válido
+
+---
+
+### 17. Flujo completo: Solicitud protegida con validación de token
+
+Cuando haces una solicitud a un endpoint protegido como `GET /api/v1/categories` con token JWT:
+
+```
+Cliente HTTP
+    ↓
+GET /api/v1/categories
+Header: Authorization: Bearer eyJhbGci...
+    ↓
+public/.htaccess
+    → SetEnvIf Authority "(.*)" HTTP_AUTHORIZATION=$1
+    → Copia "Bearer eyJhbGci..." a $_SERVER['HTTP_AUTHORIZATION']
+    → Redirige a public/index.php
+    ↓
+public/index.php (línea 4)
+    → require vendor/autoload.php
+    → Carga variables de entorno (.env)
+    → require src/routes.php
+    ↓
+src/routes.php (línea 10-15)
+    → new Router()
+    → $router->use(new CorsMiddleware())
+    → $router->use(new AuthMiddleware())
+    → Registra ruta: GET /api/v1/categories → CategoryController::index
+    ↓
+src/Core/Router::dispatch() (línea 55-81)
+    → Busca ruta que coincida con GET /api/v1/categories
+    → Encuentra coincidencia
+    → Ejecuta middleware pipeline (antes del handler)
+    ↓
+Middleware Pipeline ejecuta en orden:
+    ↓
+1. CorsMiddleware::handle() (línea 13)
+    → Agrega headers CORS a Response
+    → Llama $next() → pasa al siguiente middleware
+    ↓
+2. AuthMiddleware::handle() (línea 15)
+    → Chequea si /api/v1/categories está en $publicRoutes
+    → NO está en publicRoutes → REQUIERE TOKEN
+    → Lee Request::header('Authorization')
+        → Accede a $_SERVER['http-authorization'] (normalizado por Request)
+        → Obtiene: "Bearer eyJhbGci..."
+    → Valida formato: comienza con "Bearer " ✓
+    → Extrae token: substr(..., 7) → "eyJhbGci..."
+    → Llama JwtService::decode($token)
+        → JWT::decode($token, $secret, ['HS256'])
+        → Verifica firma con JWT_SECRET
+        → Verifica fecha expiración (exp < time())
+        → Retorna objeto: {sub: 1, role: "admin", iat: ..., exp: ...}
+    → Guarda en request: $request->setAttribute('user', $decoded)
+    → Llama $next() → pasa al handler
+    ↓
+3. CategoryController::index() (línea 27)
+    → Request ahora tiene $request->getAttribute('user') disponible
+    → Puede usar datos del usuario si es necesario
+    → CategoryService::getAllCategories()
+    → Retorna Response::success([...])
+    ↓
+Response::send()
+    → HTTP 200 OK
+    → Content-Type: application/json; charset=utf-8
+    → body: { status: "success", data: [...], meta: {...} }
+    ↓
+Cliente recibe respuesta con datos
+```
+
+**Escenarios posibles:**
+
+| Escenario | Resultado |
+|-----------|-----------|
+| Token válido, no expirado | HTTP 200 + datos de categorías |
+| Sin header Authorization | HTTP 401 "Missing authorization token" |
+| Header format incorrecto (ej: `Token ...` en lugar de `Bearer ...`) | HTTP 401 "Invalid authorization header format" |
+| Token expirado (exp < time()) | HTTP 401 "Token expired" |
+| Token manipulado o firmado con otro secret | HTTP 401 "Invalid token signature" |
+| Token estructura malformada (no 3 partes separadas por .) | HTTP 401 "Invalid token" |
+| Ruta pública (/test, /api/v1/auth/login) | HTTP 200, ignora validación de token |
+
+---
+
 ## Ejemplo de respuesta JSON
 
 Solicitud:
