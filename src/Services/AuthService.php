@@ -37,4 +37,26 @@ class AuthService
             'user' => $userDTO->toArray(),
         ];
     }
+
+    public function register(string $name, string $email, string $password, string $role): array
+    {
+        $existingUser = $this->repository->findByEmail($email);
+
+        if ($existingUser) {
+            return [
+                'success' => false,
+                'message' => 'Email already registered',
+            ];
+        }
+
+        $user = $this->repository->create($name, $email, $password, $role);
+        $token = $this->jwtService->generate($user->id, $user->role);
+        $userDTO = UserDTO::fromEntity($user);
+
+        return [
+            'success' => true,
+            'token' => $token,
+            'user' => $userDTO->toArray(),
+        ];
+    }
 }

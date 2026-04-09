@@ -24,6 +24,7 @@ $router->get('/test', function (Request $request) {
 
 // Auth
 $router->post('/api/v1/auth/login', [AuthController::class, 'login']);
+$router->post('/api/v1/auth/register', [AuthController::class, 'register']);
 
 // Categories
 $router->get('/api/v1/categories', [CategoryController::class, 'index']);

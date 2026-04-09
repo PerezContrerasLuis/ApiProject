@@ -36,4 +36,24 @@ class UserRepository
 
         return $row ? User::fromArray($row) : null;
     }
+
+    public function create(string $name, string $email, string $password, string $role): User
+    {
+        $passwordHash = password_hash($password, PASSWORD_BCRYPT);
+
+        $stmt = $this->db->prepare(
+            'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)'
+        );
+        $stmt->execute([$name, $email, $passwordHash, $role]);
+
+        $userId = (int) $this->db->lastInsertId();
+
+        return new User(
+            id: $userId,
+            name: $name,
+            email: $email,
+            role: $role,
+            passwordHash: $passwordHash
+        );
+    }
 }

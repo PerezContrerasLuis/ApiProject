@@ -19,8 +19,9 @@ API REST pura en PHP 8.2 sin frameworks, con arquitectura profesional en capas.
 3. [Flujo detallado: POST /api/v1/auth/login](#flujo-detallado-post-apiv1authlogin)
 4. [Configuración .htaccess](#14-configuración-para-la-autorización)
 5. [Validación de token](#15-srcmiddlewareauthmiddlewarephp--validación-de-jwt-en-endpoints)
-6. [Estructura del código](#estructura-del-código)
-7. [Requisitos e instalación](#requisitos)
+6. [Flujo detallado: POST /api/v1/auth/register](#flujo-detallado-post-apiv1authregister)
+7. [Estructura del código](#estructura-del-código)
+8. [Requisitos e instalación](#requisitos)
 
 ---
 
@@ -2081,6 +2082,286 @@ Cliente recibe respuesta con datos
 | Token manipulado o firmado con otro secret | HTTP 401 "Invalid token signature" |
 | Token estructura malformada (no 3 partes separadas por .) | HTTP 401 "Invalid token" |
 | Ruta pública (/test, /api/v1/auth/login) | HTTP 200, ignora validación de token |
+
+---
+
+## Flujo Detallado: POST /api/v1/auth/register
+
+En esta sección rastreamos paso a paso qué ocurre cuando haces una solicitud POST a `/api/v1/auth/register` para registrar un nuevo usuario. Este endpoint **está protegido**: requiere un JWT token válido y solo usuarios con rol **admin** pueden crear nuevos usuarios.
+
+---
+
+### Cambios realizados en el código
+
+**Nuevos métodos agregados:**
+
+1. **`UserRepository::create()`** — Inserta nuevo usuario en la BD
+2. **`AuthService::register()`** — Lógica de registro (validación de email único, creación, generación de token)
+3. **`AuthController::register()`** — Handler HTTP con validaciones y control de permisos
+4. **`Response::conflict()`** — Método auxiliar para respuesta HTTP 409
+
+**Archivos modificados:**
+
+- `src/Repositories/UserRepository.php` — Agregado método `create()`
+- `src/Services/AuthService.php` — Agregado método `register()`
+- `src/Controllers/AuthController.php` — Agregado método `register()`
+- `src/Core/Response.php` — Agregado método `conflict()`
+- `src/routes.php` — Agregada ruta `POST /api/v1/auth/register`
+
+---
+
+### Cómo probar el endpoint
+
+#### 1. Paso previo: Obtener token de admin con login
+
+Primero necesitas un token JWT de un admin. Haz login:
+
+**Request:**
+```
+POST http://localhost/api/v1/auth/login
+
+Headers:
+  Content-Type: application/json
+
+Body:
+{
+  "email": "admin@example.com",
+  "password": "admin123"
+}
+```
+
+**Respuesta esperada (HTTP 200):**
+```json
+{
+  "status": "success",
+  "data": [{
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTcwMjEyMzQ1NiwiZXhwIjoxNzAyMTI3MDU2fQ.WfdapZkFNYA2pHSVVwQKvqkSFm0LjB3ir83hg...",
+    "user": {
+      "id": 1,
+      "name": "Admin User",
+      "email": "admin@example.com",
+      "role": "admin"
+    }
+  }],
+  "meta": null
+}
+```
+
+**⚠️ Copia el `token` que retorna. Lo necesitarás en el siguiente paso.**
+
+---
+
+#### 2. Registrar nuevo usuario (requiere token)
+
+Ahora usa el token obtenido para registrar un nuevo usuario:
+
+**Request:**
+```
+POST http://localhost/api/v1/auth/register
+
+Headers:
+  Content-Type: application/json
+  Authorization: Bearer <el_token_que_copiaste>
+
+Body:
+{
+  "name": "Juan Pérez",
+  "email": "juan@example.com",
+  "password": "juan123456",
+  "role": "manager"
+}
+```
+
+**Respuesta esperada (HTTP 200):**
+```json
+{
+  "status": "success",
+  "data": [{
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjUsInJvbGUiOiJtYW5hZ2VyIiwiaWF0IjoxNzAyMTIzNTAwLCJleHAiOjE3MDIxMjcxMDB9.Xy7Z9mQpL2nH4...",
+    "user": {
+      "id": 5,
+      "name": "Juan Pérez",
+      "email": "juan@example.com",
+      "role": "manager"
+    }
+  }],
+  "meta": null
+}
+```
+
+---
+
+### Validaciones y escenarios de error
+
+El endpoint realiza las siguientes validaciones:
+
+| Escenario | HTTP | Mensaje |
+|-----------|------|---------|
+| Sin token en header | 401 | Missing authorization token |
+| Usuario no es admin | 403 | Only admins can register users |
+| Email ya registrado | 409 | Email already registered |
+| Nombre vacío | 422 | Name is required |
+| Email vacío o inválido | 422 | Email must be a valid email address |
+| Password vacío | 422 | Password is required |
+| Role vacío o inválido | 422 | Role must be one of: admin, manager, viewer |
+| **Todo correcto** | **200** | Token + datos del usuario creado |
+
+---
+
+### Detalle del código: `AuthController::register()`
+
+```php
+public function register(Request $request): void
+{
+    // Línea 1: Obtener el usuario autenticado del JWT (set por AuthMiddleware)
+    $authUser = $request->getAttribute('user');
+
+    // Línea 4-6: Verificar que el usuario autenticado sea admin
+    // Si no es admin, retornar HTTP 403
+    if ($authUser->role !== 'admin') {
+        Response::forbidden('Only admins can register users')->send();
+    }
+
+    // Línea 8-12: Extraer datos del request y limpiar espacios
+    $body = $request->json();
+    $name = trim($body['name'] ?? '');
+    $email = trim($body['email'] ?? '');
+    $password = $body['password'] ?? '';
+    $role = trim($body['role'] ?? '');
+
+    // Línea 14-17: Validar que name no esté vacío
+    if (empty($name)) {
+        Response::validationError(['name' => 'Name is required'])->send();
+    }
+
+    // Línea 19-24: Validar email (no vacío y formato válido)
+    if (empty($email)) {
+        Response::validationError(['email' => 'Email is required'])->send();
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        Response::validationError(['email' => 'Email must be a valid email address'])->send();
+    }
+
+    // Línea 26-29: Validar que password no esté vacío
+    if (empty($password)) {
+        Response::validationError(['password' => 'Password is required'])->send();
+    }
+
+    // Línea 31-35: Validar que role sea uno de los valores permitidos
+    $validRoles = ['admin', 'manager', 'viewer'];
+    if (empty($role) || !in_array($role, $validRoles, true)) {
+        Response::validationError(['role' => 'Role must be one of: admin, manager, viewer'])->send();
+    }
+
+    // Línea 37-39: Intentar registrar el usuario
+    // AuthService::register() chequea si el email ya existe y lo crea si es nuevo
+    $result = $this->service->register($name, $email, $password, $role);
+
+    // Línea 41-43: Si el registro falló (email duplicado), retornar HTTP 409
+    if (!$result['success']) {
+        Response::conflict($result['message'])->send();
+    }
+
+    // Línea 45-52: Éxito: retornar token y datos del usuario creado
+    Response::success([
+        [
+            'token' => $result['token'],
+            'user' => $result['user'],
+        ]
+    ])->send();
+}
+```
+
+**Puntos clave:**
+
+- **Línea 3:** `$request->getAttribute('user')` — Obtiene datos del JWT (set por `AuthMiddleware`) con los campos: `sub` (user id), `role`, `iat`, `exp`
+- **Línea 5:** Verifica `$authUser->role !== 'admin'` — Solo admins pueden registrar usuarios
+- **Línea 37:** `AuthService::register()` realiza la lógica de negocio: chequea si email existe, crea usuario, genera token
+- **Línea 41:** `Response::conflict()` retorna HTTP 409 (usado cuando el email ya está registrado)
+
+---
+
+### Detalle del código: `AuthService::register()`
+
+```php
+public function register(string $name, string $email, string $password, string $role): array
+{
+    // Línea 1-4: Buscar si el email ya existe
+    $existingUser = $this->repository->findByEmail($email);
+
+    // Línea 6-10: Si ya existe, retornar error sin lanzar excepción
+    if ($existingUser) {
+        return [
+            'success' => false,
+            'message' => 'Email already registered',
+        ];
+    }
+
+    // Línea 12-13: Crear nuevo usuario en la BD
+    // UserRepository::create() hashea el password con bcrypt e inserta en usuarios
+    $user = $this->repository->create($name, $email, $password, $role);
+
+    // Línea 15-16: Generar JWT para el nuevo usuario
+    $token = $this->jwtService->generate($user->id, $user->role);
+
+    // Línea 18-19: Convertir entity a DTO (sin incluir password_hash)
+    $userDTO = UserDTO::fromEntity($user);
+
+    // Línea 21-26: Retornar éxito con token y datos del usuario
+    return [
+        'success' => true,
+        'token' => $token,
+        'user' => $userDTO->toArray(),
+    ];
+}
+```
+
+**Puntos clave:**
+
+- **Línea 2:** `findByEmail()` chequea si el email ya está registrado
+- **Línea 12:** `UserRepository::create()` hashea el password con `password_hash()` antes de insertar
+- **Línea 15:** Genera JWT para que el nuevo usuario pueda hacer requests inmediatamente
+- **Línea 18:** Usa DTO para que la respuesta NO incluya el `password_hash`
+
+---
+
+### Detalle del código: `UserRepository::create()`
+
+```php
+public function create(string $name, string $email, string $password, string $role): User
+{
+    // Línea 1: Hashear la contraseña con bcrypt (one-way)
+    // password_hash() genera un hash único y seguro de la contraseña
+    $passwordHash = password_hash($password, PASSWORD_BCRYPT);
+
+    // Línea 4-6: Preparar statement INSERT y ejecutar
+    // Se usa prepared statement para prevenir SQL injection
+    $stmt = $this->db->prepare(
+        'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)'
+    );
+    $stmt->execute([$name, $email, $passwordHash, $role]);
+
+    // Línea 9: Obtener el ID del usuario recién insertado
+    // lastInsertId() retorna el ID auto-incrementado de la fila insertada
+    $userId = (int) $this->db->lastInsertId();
+
+    // Línea 11-18: Retornar nueva instancia de User con los datos
+    return new User(
+        id: $userId,
+        name: $name,
+        email: $email,
+        role: $role,
+        passwordHash: $passwordHash
+    );
+}
+```
+
+**Puntos clave:**
+
+- **Línea 1:** `password_hash($password, PASSWORD_BCRYPT)` — Crea hash one-way. Imposible recuperar la contraseña original.
+- **Línea 4-6:** Prepared statement `INSERT INTO users (...)` — Previene SQL injection
+- **Línea 9:** `lastInsertId()` — Obtiene el ID auto-incrementado generado por MySQL
+- **Línea 11-18:** Retorna la instancia de `User` con los datos del usuario creado
 
 ---
 

@@ -46,6 +46,11 @@ class Response
         return self::error($message, 403);
     }
 
+    public static function conflict(string $message = 'Conflict'): self
+    {
+        return self::error($message, 409);
+    }
+
     public static function validationError(array $errors, int $statusCode = 422): self
     {
         return new self([
