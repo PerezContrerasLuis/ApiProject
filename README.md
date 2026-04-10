@@ -403,15 +403,11 @@ Para información detallada sobre la arquitectura, patrones de diseño, flujo de
 
 - **CLAUDE.md** - Notas técnicas completas sobre la arquitectura, setup, y decisiones de diseño
 
-Documentación adicional está en desarrollo:
-- Guía de patrones de diseño
-- Flujo detallado de solicitudes HTTP
-- Referencia de endpoints
-- Guía de extensión y contribución
-
 - **ManualTecnico.md** - Notas técnicas completas sobre el flujo de los endpoints existentes.
 
 - **postman/README.md** - Archivos json collections y environment para probar en el cliente de Postman
+
+
 
 ---
 
