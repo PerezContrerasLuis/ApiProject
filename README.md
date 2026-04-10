@@ -11,10 +11,11 @@ REST API desarrollada en PHP 8.2 sin frameworks, con arquitectura profesional en
 3. [Requisitos Previos](#requisitos-previos)
 4. [Instalación y Configuración](#instalación-y-configuración)
 5. [Uso](#uso)
-6. [Estructura del Proyecto](#estructura-del-proyecto)
-7. [Endpoints Disponibles](#endpoints-disponibles)
-8. [Credenciales de Testing](#credenciales-de-testing)
-9. [Documentación Técnica](#documentación-técnica)
+6. [Testing con Postman](#testing-con-postman)
+7. [Estructura del Proyecto](#estructura-del-proyecto)
+8. [Endpoints Disponibles](#endpoints-disponibles)
+9. [Credenciales de Testing](#credenciales-de-testing)
+10. [Documentación Técnica](#documentación-técnica)
 
 ---
 
@@ -164,6 +165,36 @@ Para ver logs del contenedor PHP:
 ```bash
 docker logs -f api_php
 ```
+
+---
+
+## Testing con Postman
+
+Se incluye una colección de Postman con todos los endpoints pre-configurados para facilitar testing y desarrollo.
+
+### Características
+
+- Todos los endpoints configurados y organizados por categorías
+- Variables de entorno (base_url, auth_token)
+- Validaciones automáticas en respuestas
+- Token JWT se guarda automáticamente después de login
+- Tests pre-configurados en endpoints
+
+### Archivos Incluidos
+
+- **`postman/ApiProject.postman_collection.json`** — Colección completa de endpoints
+- **`postman/ApiProject.postman_environment.json`** — Variables de entorno configuradas
+- **`postman/README.md`** — Instrucciones detalladas de importación y uso
+
+### Importación Rápida
+
+1. En Postman: **Import** → **Upload Files**
+2. Selecciona `postman/ApiProject.postman_collection.json`
+3. Importa el environment desde `postman/ApiProject.postman_environment.json`
+4. Selecciona el environment en el dropdown superior derecho
+5. Haz login en `POST /auth/login` para obtener token
+
+Para instrucciones completas, consulta `postman/README.md`.
 
 ---
 
@@ -377,6 +408,10 @@ Documentación adicional está en desarrollo:
 - Flujo detallado de solicitudes HTTP
 - Referencia de endpoints
 - Guía de extensión y contribución
+
+- **ManualTecnico.md** - Notas técnicas completas sobre el flujo de los endpoints existentes.
+
+- **postman/README.md** - Archivos json collections y environment para probar en el cliente de Postman
 
 ---
 

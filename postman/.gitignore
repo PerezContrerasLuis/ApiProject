@@ -1,0 +1,4 @@
+# Ignora environments con credenciales reales (opcional)
+# Descomenta si tu environment contiene secrets
+
+# *.postman_environment.json

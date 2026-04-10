@@ -1,0 +1,190 @@
+{
+  "info": {
+    "_postman_id": "d3ad8a15-c53f-45a1-b3b3-38ee197472e5",
+    "name": "ApiProject",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "2518705"
+  },
+  "item": [
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "categories Params",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3NTc3NDU3MiwiZXhwIjoxNzc1Nzc4MTcyfQ.KRMeR8FEIg3LlZ92aMU6LTqbvKGQFVoRteDTYzWsjJY",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}api/v1/categories?page=2&per_page=5",
+              "host": [
+                "{{url}}api"
+              ],
+              "path": [
+                "v1",
+                "categories"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "2"
+                },
+                {
+                  "key": "per_page",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "categories",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3NTc3NDU3MiwiZXhwIjoxNzc1Nzc4MTcyfQ.KRMeR8FEIg3LlZ92aMU6LTqbvKGQFVoRteDTYzWsjJY",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3NTc3NDU3MiwiZXhwIjoxNzc1Nzc4MTcyfQ.KRMeR8FEIg3LlZ92aMU6LTqbvKGQFVoRteDTYzWsjJY",
+                "type": "text",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{url}}api/v1/categories",
+              "host": [
+                "{{url}}api"
+              ],
+              "path": [
+                "v1",
+                "categories"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "categories_id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3NTc3NDU3MiwiZXhwIjoxNzc1Nzc4MTcyfQ.KRMeR8FEIg3LlZ92aMU6LTqbvKGQFVoRteDTYzWsjJY",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}api/v1/categories/3",
+              "host": [
+                "{{url}}api"
+              ],
+              "path": [
+                "v1",
+                "categories",
+                "3"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "AUTH",
+      "item": [
+        {
+          "name": "login válido",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"admin@example.com\",\"password\":\"admin123\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}api/v1/auth/login",
+              "host": [
+                "{{url}}api"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "registrar usuario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3NTc3NDU3MiwiZXhwIjoxNzc1Nzc4MTcyfQ.KRMeR8FEIg3LlZ92aMU6LTqbvKGQFVoRteDTYzWsjJY",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Cristiano ronaldo\",\n    \"email\": \"cr7@example.com\",\n    \"password\": \"cr7123\",\n    \"role\": \"manager\"\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}api/v1/auth/register",
+              "host": [
+                "{{url}}api"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "test",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{url}}test",
+          "host": [
+            "{{url}}test"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
