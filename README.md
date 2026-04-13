@@ -246,6 +246,8 @@ ApiProject/
 └── README.md            # Este archivo
 ```
 
+![Arquitectura en Capas - API PHP](docs/diagrams/diagram.png)
+
 ---
 
 ## Endpoints Disponibles
