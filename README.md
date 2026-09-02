@@ -246,6 +246,10 @@ ApiProject/
 └── README.md            # Este archivo
 ```
 
+## Diagrma UML  
+![mul](docs/diagrams/uml.png)
+
+## Arquitectura en Capas - API PHP
 ![Arquitectura en Capas - API PHP](docs/diagrams/diagram.png)
 
 ---
